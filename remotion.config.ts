@@ -1,13 +1,19 @@
-/**
- * Note: When using the Node.JS APIs, the config file
- * doesn't apply. Instead, pass options directly to the APIs.
- *
- * All configuration options: https://remotion.dev/docs/config
- */
+import { existsSync } from 'node:fs';
+import { Config } from '@remotion/cli/config';
 
-import { Config } from "@remotion/cli/config";
+// Remotion's stripped-down headless shell can't create a WebGPU device on Windows
+// (dxcompiler.dll fails to load), so use the installed Chrome instead.
+const CHROME_PATHS = [
+  'C:\Program Files\Google\Chrome\Application\chrome.exe',
+  'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+];
+const chrome = CHROME_PATHS.find((p) => existsSync(p));
+if (chrome) {
+  Config.setChromeMode('chrome-for-testing');
+  Config.setBrowserExecutable(chrome);
+}
 
-Config.setRspack(true);
-Config.setVideoImageFormat("jpeg");
-Config.setOverwriteOutput(true);
-Config.setDefaultPremountInSeconds(2);
+Config.setChromiumOpenGlRenderer('angle');
+Config.setVideoImageFormat('png');
+Config.setConcurrency(1); // one GPU context; frames are heavy
+Config.setCodec('h264');

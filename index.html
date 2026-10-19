@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Heaven's Gate — Teaser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300&family=Cinzel:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="stage">
+      <canvas id="view"></canvas>
+      <canvas id="overlay"></canvas>
+    </div>
+
+    <div id="gate">
+      <div class="gate-inner">
+        <h2>HEAVEN'S GATE</h2>
+        <p class="sub">teaser · real-time WebGPU</p>
+        <button id="play" disabled>Loading</button>
+        <p class="hint">Headphones recommended · lights off</p>
+      </div>
+    </div>
+
+    <div id="camlabels"></div>
+    <div id="campanel">
+      <div class="camhead">
+        <span>Cameras <kbd>V</kbd></span>
+        <span><button class="camall">all</button><button class="camnone">none</button></span>
+      </div>
+      <div class="camlist"></div>
+      <p class="camnote">Checkbox = show that camera in the world. <b>view</b> = look through it.</p>
+    </div>
+
+    <div id="hud" class="hidden">
+      <aside id="legend">
+        <div class="lg-head">
+          <span>Controls</span>
+          <button id="legend-close" title="Hide this list (press ?)">?</button>
+        </div>
+        <section>
+          <h3>Playback</h3>
+          <dl>
+            <dt><kbd>Space</kbd></dt><dd>Play / pause</dd>
+            <dt><kbd>&larr;</kbd> <kbd>&rarr;</kbd></dt><dd>Jump 5 seconds</dd>
+            <dt><kbd>R</kbd></dt><dd>Restart</dd>
+          </dl>
+        </section>
+        <section>
+          <h3>Free camera</h3>
+          <dl>
+            <dt><kbd>F</kbd></dt><dd>Turn on / off</dd>
+            <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move</dd>
+            <dt><kbd>Shift</kbd> <kbd>Ctrl</kbd></dt><dd>Up / down</dd>
+            <dt><kbd>Q</kbd> <kbd>E</kbd></dt><dd>Look left / right</dd>
+            <dt>Mouse drag</dt><dd>Look around</dd>
+            <dt>Wheel</dt><dd>Fly speed</dd>
+            <dt><kbd>C</kbd></dt><dd>Copy shot code</dd>
+          </dl>
+        </section>
+        <section>
+          <h3>View</h3>
+          <dl>
+            <dt><kbd>V</kbd></dt><dd>Cameras panel</dd>
+            <dt><kbd>H</kbd></dt><dd>Hide everything</dd>
+            <dt><kbd>?</kbd></dt><dd>This list</dd>
+          </dl>
+        </section>
+      </aside>
+
+      <div id="statusbar">
+        <div class="sb-left">
+          <span id="backend" class="chip"></span>
+          <span id="clock">0.0s</span>
+        </div>
+        <div id="cam"></div>
+        <div class="sb-right">
+          <button id="legend-open" title="Show controls (press ?)">? Controls</button>
+          <button id="rec">&#9679; Record .webm</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

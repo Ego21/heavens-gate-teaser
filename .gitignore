@@ -1,7 +1,9 @@
 node_modules
 dist
+out
 .DS_Store
 .env
 
-# Ignore the output video from Git but not videos you import into src/.
-out
+# local tool state
+.impeccable
+.claude

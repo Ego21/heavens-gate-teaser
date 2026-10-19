@@ -1,16 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2018",
-    "module": "Preserve",
-    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
+    "allowJs": true,
+    "checkJs": false,
     "noEmit": true,
-    "lib": ["es2015"],
-    "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "noUnusedLocals": true
+    "esModuleInterop": true,
+    "types": ["react", "@webgpu/types"]
   },
-  "exclude": ["remotion.config.ts"]
+  "include": ["src", "remotion.config.ts"]
 }

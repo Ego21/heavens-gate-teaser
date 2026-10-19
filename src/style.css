@@ -1,0 +1,334 @@
+:root {
+  --ink: #e8e2d6;
+  --ink-dim: rgba(232, 226, 214, 0.55);
+  --blood: #8a1c14;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  color: var(--ink);
+  overflow: hidden;
+  font-family: "Cormorant Garamond", serif;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+}
+
+#view {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#gate {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, #0b0d0f 0%, #000 70%);
+  transition: opacity 1.2s ease;
+}
+#gate.gone {
+  opacity: 0;
+  pointer-events: none;
+}
+.gate-inner {
+  text-align: center;
+  padding: 0 16px;
+}
+.gate-inner h2 {
+  font-family: "Cinzel", serif;
+  font-weight: 400;
+  letter-spacing: 0.4em;
+  font-size: clamp(28px, 5vw, 64px);
+  margin: 0 0 0 0.4em;
+}
+.gate-inner .sub {
+  color: var(--ink-dim);
+  letter-spacing: 0.25em;
+  font-size: 14px;
+  text-transform: uppercase;
+  margin: 12px 0 36px;
+}
+.gate-inner .hint {
+  color: var(--ink-dim);
+  font-style: italic;
+  margin-top: 28px;
+}
+#play {
+  font-family: "Cinzel", serif;
+  font-size: 18px;
+  letter-spacing: 0.4em;
+  padding: 14px 42px 14px 48px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid rgba(232, 226, 214, 0.35);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+#play:hover {
+  border-color: var(--blood);
+  color: #fff;
+  background: rgba(138, 28, 20, 0.18);
+}
+#play:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  z-index: 8;
+}
+#hud.hidden {
+  display: none;
+}
+#hud button {
+  pointer-events: auto;
+}
+
+/* bottom status bar: what is playing on the left, camera readout in the middle, actions on the right */
+#statusbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0));
+}
+.sb-left,
+.sb-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sb-right {
+  justify-content: flex-end;
+}
+.chip {
+  padding: 1px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+#clock {
+  font-variant-numeric: tabular-nums;
+}
+
+/* controls card */
+#legend {
+  position: absolute;
+  left: 14px;
+  bottom: 52px;
+  width: 270px;
+  padding: 10px 12px 12px;
+  background: rgba(8, 10, 12, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  pointer-events: auto;
+}
+#legend.collapsed {
+  display: none;
+}
+.lg-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.9);
+}
+#legend section {
+  margin-top: 10px;
+}
+#legend h3 {
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 3px;
+}
+#legend dl {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  row-gap: 5px;
+  column-gap: 10px;
+  margin: 6px 0 0;
+}
+#legend dt {
+  color: rgba(255, 255, 255, 0.55);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+#legend dd {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 5px;
+  text-align: center;
+  font: inherit;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}
+#legend-close,
+#legend-open {
+  font: inherit;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+#legend-close:hover,
+#legend-open:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+#rec {
+  font: inherit;
+  color: #d66;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(220, 90, 90, 0.4);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+#rec.on {
+  background: #6a1010;
+  color: #fff;
+}
+
+#cam {
+  color: #9fd0a8;
+  font-size: 12px;
+  white-space: nowrap;
+}
+#cam:empty {
+  display: none;
+}
+
+#camlabels {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
+  display: none;
+}
+.camlabel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: -22px 0 0 8px;
+  font: 12px ui-monospace, Consolas, monospace;
+  text-shadow: 0 1px 3px #000;
+  white-space: nowrap;
+}
+.camlabel.active {
+  font-weight: 700;
+}
+#campanel {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 290px;
+  z-index: 9;
+  display: none;
+  background: rgba(8, 10, 12, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px;
+  font: 12px ui-monospace, Consolas, monospace;
+  color: rgba(255, 255, 255, 0.8);
+}
+.camhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.camhead kbd {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0 4px;
+  margin-left: 4px;
+}
+#campanel button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 1px 7px;
+  margin-left: 4px;
+  cursor: pointer;
+}
+#campanel button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.camrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 4px;
+  cursor: pointer;
+}
+.camrow.active {
+  background: rgba(255, 255, 255, 0.12);
+}
+.camdot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.camname {
+  flex: 1;
+}
+.camtime {
+  color: rgba(255, 255, 255, 0.5);
+}
+.camnote {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.4;
+}
