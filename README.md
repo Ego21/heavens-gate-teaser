@@ -34,13 +34,32 @@ npm install
 
 ### Rendering in 4K
 
-The composition is 1920×1080. Render it at double scale for 3840×2160:
+The composition is 1920×1080. A 4K video is made by rendering it at **2× scale** (3840×2160). You don't change the
+composition itself; the 3D scene and titles are redrawn at the higher resolution.
+
+**In Remotion Studio** (`npm run studio`, then http://localhost:3000/Teaser in Chrome):
+
+1. Click **Render** at the bottom right of the Studio window.
+2. In the panel that opens, make sure **Video** is selected at the top.
+3. Open the **Picture** tab on the left and change **Scale** from `1.0x` to **`2`**.
+4. Open the **General** tab and check the codec is H.264 (mp4). The output name and folder are shown there too.
+5. Click **Render video** (top right). Keep the browser tab open until it finishes.
+
+**Where the video is saved:** in the **`out/`** folder inside the project, named after the output name shown in the
+Render panel's General tab (by default `out/Teaser.mp4`). The **Jobs** tab in the Studio sidebar lists renders you have
+started, so you can check progress and find the file there. `out/` is git-ignored, so rendered videos are never committed.
+
+**Bitrate / file size:** Scale doesn't set the bitrate directly. The default encoding targets a quality level, so a 4K
+render uses a higher bitrate than 1080p automatically (this scene is dark with film grain, which is expensive to compress,
+so expect a large file). To change it, use the **Encoding** tab: lower the quality number for a better picture and a bigger
+file, or set a fixed **Video bitrate**.
+
+**From the terminal** (same result, no menus):
 
 ```bash
 npx remotion render src/remotion/index.ts Teaser out/teaser-4k.mp4 --scale=2
 ```
 
-Or use the Render button in Studio and set the scale to 2.
 A section only: add `--frames=1020-1109`. A single frame: `npx remotion still src/remotion/index.ts Teaser out/frame.png --frame=1050`.
 
 ### Free camera (explore the world)
