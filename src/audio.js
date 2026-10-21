@@ -1,7 +1,7 @@
 // Procedural score + sound design. Nothing is sampled; every sound is synthesised
 // and scheduled against the trailer clock so audio and picture stay locked.
 
-import { glitchAt, VANISH_T } from './shots.js';
+import { glitchAt, VANISH_T, ROW } from './shots.js';
 
 const LULLABY = [ // original melody, A minor, [midi, beats]
   [76, 1], [69, 1], [72, 1], [71, 2], [69, 1], [64, 2],
@@ -224,7 +224,7 @@ export class Score {
     }
 
     // oar strokes + water slaps around the boat
-    for (let t = 12.3; t < 27; t += 2.6) at(t, (w) => this.oarStroke(w));
+    for (let t = ROW.t0; t < ROW.until - 0.4; t += ROW.period) at(t, (w) => this.oarStroke(w)); // blade enters at +ROW.catchAt
     for (let t = 12; t < 45; t += 1.37) at(t + Math.sin(t * 7) * 0.3, (w) => this.slap(w, t > 40 ? 0.12 : 0.07));
 
     // bell buoy

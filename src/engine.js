@@ -9,9 +9,10 @@ import { chromaticAberration } from 'three/addons/tsl/display/ChromaticAberratio
 import { godrays } from 'three/addons/tsl/display/GodraysNode.js';
 import { bilateralBlur } from 'three/addons/tsl/display/BilateralBlurNode.js';
 
-import { uTime, uFogDensity, MOON_DIR, setupFog, beamMaterial, glowMaterial, waveHeight, waveSlope } from './materials.js';
-import { buildWorld, terrainHeight, setSmile } from './world.js';
-import { shotAt, baseState, boatState, flicker, smooth, CAPTIONS, TITLE, NAME_CARD } from './shots.js';
+import { uTime, uFogDensity, MOON_DIR, setupFog, beamMaterial, glowMaterial, rippleMaterial, waveHeight, waveSlope } from './materials.js';
+import { buildWorld, terrainHeight, poseChild } from './world.js';
+import { updateGuardian } from './guardian.js';
+import { shotAt, baseState, boatState, rowStroke, ROW, flicker, smooth, CAPTIONS, TITLE, NAME_CARD } from './shots.js';
 
 export const BASE_EXPOSURE = 0.8;
 
@@ -115,14 +116,21 @@ export function createTrailer({ renderer, scene, camera, low = false, skip = [] 
   spot.position.copy(lamp);
   scene.add(beam, lampGlow, spot, spot.target);
 
-  // hard top-left key for the man in the shroud, like a studio portrait
-  const key = new THREE.SpotLight(0xeef2f6, 0, 14, 0.42, 0.65, 2);
-  key.position.copy(W.man.root.position).add(new THREE.Vector3(-1.6, 3.0, 2.2));
-  key.target.position.copy(W.man.root.position).add(new THREE.Vector3(0, 1.6, 0));
+  // a cold, soft light from high in front of the guardian: brightest on his face and scarf,
+  // falling off down the poncho so the folds still read, his legs left to the dark; and a faint
+  // rim from behind that lifts his silhouette off the fog
+  const key = new THREE.SpotLight(0xdde5ee, 0, 10, 0.46, 0.85, 2);
+  key.position.copy(W.man.root.position).add(new THREE.Vector3(-0.6, 3.2, 2.1));
+  key.target.position.copy(W.man.root.position).add(new THREE.Vector3(0, 1.45, 0.05));
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
-  key.shadow.bias = -0.0006;
-  scene.add(key, key.target);
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.bias = -0.0004;
+  key.shadow.normalBias = 0.01;
+  key.shadow.radius = 3;
+  const rim = new THREE.SpotLight(0xb8c6d6, 0, 9, 0.5, 0.9, 2);
+  rim.position.copy(W.man.root.position).add(new THREE.Vector3(1.4, 2.8, -2.4));
+  rim.target.position.copy(W.man.root.position).add(new THREE.Vector3(0, 1.3, 0));
+  scene.add(key, key.target, rim, rim.target);
 
   // two small figures that end up behind the gate
   const ghosts = new THREE.Group();
@@ -246,24 +254,78 @@ export function createTrailer({ renderer, scene, camera, low = false, skip = [] 
   const tmp = new THREE.Vector3();
   const headWorld = new THREE.Vector3();
 
+  function setOar(oar, st) {
+    const s = oar.userData.s;
+    oar.rotation.set(0, s * st.sweep, s * -(0.1 + 0.15 * st.dip), 'YXZ');
+  }
+
+  // Rings on the water where each blade went in, spreading and fading. Each is placed where the
+  // blade was at its catch, recomputed from that moment's boat and stroke, so seeking anywhere
+  // shows the same rings.
+  const ripples = [];
+  for (let i = 0; i < 4; i++) {
+    const uA = uniform(0);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), rippleMaterial(uA, i));
+    m.renderOrder = 4;
+    m.frustumCulled = false;
+    scene.add(m);
+    ripples.push({ m, uA });
+  }
+  const ghostBoat = new THREE.Object3D(), ghostOar = new THREE.Object3D();
+  ghostBoat.rotation.order = 'YXZ';
+  ghostBoat.add(ghostOar);
+  function placeRipples(t) {
+    const first = ROW.t0 + ROW.catchAt;
+    const k = Math.floor((t - first) / ROW.period);
+    ripples.forEach((rp, i) => {
+      const oar = W.oars[i % 2];
+      const tc = first + (k - Math.floor(i / 2)) * ROW.period;
+      const age = t - tc;
+      if (age < 0 || age > 2.6 || rowStroke(tc).weight < 0.5) { rp.m.visible = false; return; }
+      const b = boatState(tc);
+      ghostBoat.position.copy(b.pos);
+      ghostBoat.rotation.set(b.pitch, b.yaw, b.roll);
+      ghostOar.position.copy(oar.position);
+      ghostOar.userData.s = oar.userData.s;
+      setOar(ghostOar, rowStroke(tc));
+      ghostBoat.updateMatrixWorld(true);
+      ghostOar.localToWorld(tmp.copy(oar.userData.blade));
+      rp.m.visible = true;
+      rp.m.position.set(tmp.x, waveHeight(tmp.x, tmp.z, t) + 0.012, tmp.z);
+      rp.m.scale.setScalar(0.25 + age * 0.55);
+      rp.uA.value = (1 - age / 2.6) ** 1.5;
+    });
+  }
+
   function animateWorld(t) {
     uTime.value = t;
     const b = boatState(t);
     W.boatRig.position.copy(b.pos);
     W.boatRig.rotation.set(b.pitch, b.yaw, b.roll, 'YXZ');
 
-    const rowing = t < 27.4;
-    const ph = ((t - 12.3) / 2.6) * Math.PI * 2;
-    W.oars.forEach((oar, i) => {
-      const s = i === 0 ? -1 : 1;
-      oar.rotation.y = rowing ? s * Math.sin(ph) * 0.45 : s * 0.25;
-      oar.rotation.z = s * (rowing ? -0.22 + Math.cos(ph) * 0.12 : -0.3);
-    });
-    W.rowKid.rotation.x = rowing ? Math.sin(ph) * 0.22 : 0.05;
+    // rowing: the oars, her body and her grip all follow one stroke (rowStroke, shared with the
+    // oar sounds); the blades bury in the drive and lift clear on the recovery
+    const st = rowStroke(t);
+    W.oars.forEach((oar) => setOar(oar, st));
+    W.rowKid.rotation.x = -st.lean * 0.55;
     W.bowKid.userData.head.rotation.set(Math.sin(t * 0.4) * 0.04, Math.sin(t * 0.23) * 0.08, 0);
-    W.rowKid.userData.head.rotation.set(0.1, Math.sin(t * 0.31) * 0.1, Math.sin(t * 0.17) * 0.05);
+    W.rowKid.userData.head.rotation.set(0.1 - st.lean * 0.15, Math.sin(t * 0.31) * 0.1, Math.sin(t * 0.17) * 0.05);
 
     W.lanternPivot.rotation.set(-b.pitch + Math.sin(t * 1.3) * 0.09, 0, -b.roll + Math.sin(t * 0.9) * 0.07);
+    W.boatRig.updateMatrixWorld(true);
+    // hands: the rower's on the oar handles (each hand the oar on its side), the girl's on the pole
+    const grip = {};
+    for (const oar of W.oars) {
+      const p = W.rowKid.worldToLocal(oar.localToWorld(tmp.copy(oar.userData.handle)));
+      grip[p.x > 0 ? 'right' : 'left'] = p.clone();
+    }
+    poseChild(W.rowKid, grip);
+    const half = W.pole.userData.len / 2;
+    poseChild(W.bowKid, {
+      right: W.bowKid.worldToLocal(W.pole.localToWorld(tmp.set(0, -half + 0.1, 0))).clone(),
+      left: W.bowKid.worldToLocal(W.pole.localToWorld(tmp.set(0, -half + 0.28, 0))).clone(),
+    });
+    placeRipples(t);
 
     const bx = W.buoy.position.x, bz = W.buoy.position.z;
     const [sx, sz] = waveSlope(bx, bz, t);
@@ -272,15 +334,22 @@ export function createTrailer({ renderer, scene, camera, low = false, skip = [] 
     W.boatRig.updateMatrixWorld(true);
   }
 
-  function placeCreature(c) {
+  function placeCreature(c, t) {
     const C = W.creature;
-    C.root.visible = c.visible;
-    if (!c.visible) return;
+    // slow, heavy life: the chest rises and falls, the skull drifts, the arms sway a little. Set
+    // first, every frame, so the pose (and the follow placement below) depends only on t.
+    C.upper.scale.set(1 + 0.012 * Math.sin(t * 0.8), 1 + 0.006 * Math.sin(t * 0.8 + 0.4), 1 + 0.016 * Math.sin(t * 0.8));
+    C.arms.forEach((arm, i) => {
+      arm.rotation.x = 0.035 * Math.sin(t * 0.45 + i * 1.7);
+      arm.rotation.z = (i ? 1 : -1) * 0.02 * Math.sin(t * 0.31 + i);
+    });
+    const driftX = 0.025 * Math.sin(t * 0.37 + 1.1), driftZ = 0.03 * Math.sin(t * 0.23);
+    C.root.visible = c.visible; // posed even while hidden, so no frame inherits another's pose
     if (c.follow) {
       C.root.rotation.set(0, c.follow.yaw, 0);
       C.upper.rotation.x = c.follow.lean;
-      C.head.rotation.x = c.follow.headPitch - c.follow.lean;
-      C.head.rotation.z = c.headRoll || 0;
+      C.head.rotation.x = c.follow.headPitch - c.follow.lean + driftX;
+      C.head.rotation.z = (c.headRoll || 0) + driftZ;
       C.root.position.set(0, 0, 0);
       C.root.updateMatrixWorld(true);
       C.head.getWorldPosition(headWorld);
@@ -289,8 +358,8 @@ export function createTrailer({ renderer, scene, camera, low = false, skip = [] 
       C.root.position.copy(c.pos);
       C.root.rotation.set(0, c.yaw, 0);
       C.upper.rotation.x = c.lean;
-      C.head.rotation.x = c.headPitch - c.lean;
-      C.head.rotation.z = c.headRoll || 0;
+      C.head.rotation.x = c.headPitch - c.lean + driftX;
+      C.head.rotation.z = (c.headRoll || 0) + driftZ;
     }
     C.uEyes.value = c.eyes;
   }
@@ -351,14 +420,15 @@ export function createTrailer({ renderer, scene, camera, low = false, skip = [] 
     W.uLanternGlow.value = 1.3 * s.lantern * fl;
 
     aimBeam(s, t);
-    placeCreature(s.creature);
+    placeCreature(s.creature, t);
     W.gateLeft.rotation.y = s.gateOpen;
     ghosts.visible = s.ghosts;
     W.man.root.visible = s.man;
-    W.man.root.rotation.z = s.manTilt;
-    setSmile(W.man, s.smile);
+    if (s.man) updateGuardian(W.man, t, { smile: s.smile, tilt: s.manTilt, open: s.mouthOpen });
     key.visible = s.keyLight > 0;
-    key.intensity = 9 * s.keyLight;
+    key.intensity = 7.5 * s.keyLight;
+    rim.visible = key.visible;
+    rim.intensity = 2.2 * s.keyLight;
     state = s;
   }
 

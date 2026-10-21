@@ -326,7 +326,7 @@ async function main() {
   }
 
   // debugging hooks
-  window.__trailer = { seek: (x) => { t = x; engine.update(t); }, SHOTS, get t() { return t; }, get score() { return score; }, scene, camera, renderer, pipeline, THREE, W, moon, hemi, spot, U, override: null };
+  window.__trailer = { seek: (x) => { t = x; engine.update(t); }, engine, SHOTS, get t() { return t; }, get score() { return score; }, scene, camera, renderer, pipeline, THREE, W, moon, hemi, spot, U, override: null };
 }
 
 main().catch((err) => {

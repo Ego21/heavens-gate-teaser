@@ -6,8 +6,8 @@ There are no model, texture or audio files. Every surface, character and sound i
 
 **Story beats:** two masked children row toward an island gate at night. A giant
 rabbit-skulled creature rises in the fog, the lantern dies, it is suddenly right behind
-them, the gate slams shut, and a man in a white shroud smiles from the dark.
-Final card: **THE DEVIL MAN / SYAZMIE / Left Hand of God**.
+them, the gate slams shut, and the guardian who keeps it, all in white, his face pale and blurred, smiles from the dark.
+Final card (as set in `NAME_CARD`, `src/shots.js`): **THE DEVIL MAN / IMI / Left Hand of God**.
 
 ## Requirements
 
@@ -120,12 +120,18 @@ Times are in seconds. Line numbers are approximate and will drift as you edit.
 | Shot list, timing, camera moves, focus | `src/shots.js` | `SHOTS` (line ~60) |
 | Captions, title, name card text | `src/shots.js` | `CAPTIONS` (8), `TITLE` (12), `NAME_CARD` (13) |
 | Total length | `src/shots.js` | `DURATION` (6) |
-| Children, boat, lantern | `src/world.js` | `buildBoat` (~247), `buildChild` (~352), `buildLantern` (~380) |
-| The giant creature | `src/world.js` | `buildCreature` (~407) |
-| The white-shroud man and his smile | `src/world.js` | `buildCloakedMan` (~572) |
-| Island, gate, lighthouse, trees, rocks | `src/world.js` | `buildTerrain`, `buildTree`, `buildGate`, `buildTower`; everything is placed in `buildWorld` (~665) |
-| Surface looks (sea, sky, wood, stone, cloth, flesh, bone, shroud) | `src/materials.js` | one `*Material` function each |
-| Lights, exposure, colour grade, post-effects | `src/engine.js` | exposure (16), moon light (~51), lighthouse spotlight (~74), shroud key light (~79), post chain below |
+| Boat, oars, oarlocks, lantern | `src/world.js` | `buildBoat`, the oars in `buildWorld`, `buildLantern` |
+| Children (coats, sacking masks, arms, mittens) | `src/world.js` | `sackHead`, `buildChild`; their hands are posed each frame by `poseChild` (two-bone reach) from `animateWorld` in `src/engine.js` |
+| The rowing stroke | `src/shots.js` | `ROW` and `rowStroke`: one clock for the oars, the rower's body and grip, the ripples, and the oar sounds in `src/audio.js` |
+| The giant creature | `src/world.js` | `buildCreature`; its breathing and sway are in `placeCreature`, `src/engine.js` |
+| The guardian in white (body, poncho, scarf, sleeves, trousers, shoes) | `src/guardian.js` | body layout at the top (`HEAD_C`, `ARMS`, `LEGS`); `buildPoncho`, `buildScarf`, `buildSleeve`, `buildTrouser`; assembled in `buildGuardian` |
+| His wind | `src/guardian.js` | `windAt` (direction, strength, gusts); how each piece of cloth answers is in `buildGuardian` (`windSection`) and the `push` / `lift` / `ripple` numbers on each `build*` |
+| His face (pale, blurred, only the mouth) | `src/guardian.js`, `src/materials.js` | shape: `headGeometry`; look and mouth: `faceMaterial`, the softening veil `faceVeilMaterial` |
+| His smile, head tilt, jaw | `src/shots.js` | `s.smile`, `s.manTilt`, `s.mouthOpen` in the shots (no shot speaks, so `mouthOpen` stays 0) |
+| How worn his white clothes look | `src/materials.js` | `linenMaterial` (`mud`, `fray`); each piece's values are in `buildGuardian` |
+| Island, gate, lighthouse, trees, rocks, ground stones and grass | `src/world.js` | `buildTerrain`, `buildTree`, `buildGate`, `buildTower`; everything is placed in `buildWorld` |
+| Surface looks (sea, sky, wood, stone, cloth, flesh, bone, linen, skin, leather, glass, grass, ripples) | `src/materials.js` | one `*Material` function each |
+| Lights, exposure, colour grade, post-effects | `src/engine.js` | exposure (16), moon light (~51), lighthouse spotlight (~74), guardian key light (~79), post chain below |
 | Sound | `src/audio.js` | `scheduleBeds` (~158), `scheduleEvents` (just after) |
 | Remotion size and frame rate | `src/remotion/Root.tsx` | the whole file |
 
@@ -134,6 +140,7 @@ Times are in seconds. Line numbers are approximate and will drift as you edit.
 ```
 src/shots.js     pure functions of time: which shot is on, where the camera is
 src/world.js     builds every 3D object
+src/guardian.js  the guardian at the gate, and his wind-blown cloth (re-shaped every frame, as a function of time)
 src/materials.js procedural surfaces (noise-based, no image files)
 src/engine.js    creates the world, lights and post-processing; exposes update(t) / render()
 src/audio.js     synthesized score and sound effects
@@ -144,7 +151,10 @@ out/             rendered videos (git-ignored)
 ```
 
 Everything is deterministic: the picture at time `t` is the same every time, which is what
-lets Remotion render frame by frame.
+lets Remotion render frame by frame. That includes the guardian's cloth (re-shaped from its rest shape from `t`, no
+simulation state), the children's grip, the creature's breathing and the oar ripples (each placed where the blade was at
+its own catch, recomputed from that moment). Seeking straight to a time, playing up to it, and scrubbing back to it give
+identical poses. The guardian's cloth is only updated in the shots where he is visible.
 
 ## The vanish glitch (36.9 s)
 
@@ -167,8 +177,10 @@ To change when it happens, edit `VANISH_T` there; the effect itself is `glitchPa
 - **The scene pass uses `samples: 0`** (no multisampling) because Remotion's canvas enables MSAA, which breaks the
   depth reads that godrays and depth of field depend on.
 - Preview in Studio plays slower than real time because every frame runs the full WebGPU scene.
-- The characters and creature are placeholders built from simple shapes and procedural textures.
-  They can be replaced with real designs later.
+- **The first frame is slow.** Building the world and compiling every shader takes about 30-40 s on the first frame,
+  longer than Remotion's default wait, so `remotion.config.ts` raises the delayRender timeout to 180 s.
+- Everything is procedural (no model or texture files). The characters are built from shaped procedural meshes,
+  not sculpted or scanned assets, so they are stylised rather than film-realistic up close.
 
 ## Output
 

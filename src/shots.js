@@ -56,6 +56,25 @@ export function glitchAt(t) {
   return gate * (0.45 + 0.55 * decay) * fadeOut;
 }
 
+// The rowing stroke, shared by picture and sound: a stroke every ROW.period seconds from
+// ROW.t0 (the rowlock creaks then), the blades enter the water ROW.catchAt seconds later. The
+// rower faces the stern: at the catch she reaches toward it with the blades swung toward the
+// bow, pulls through the drive with the blades buried, lifts them, and swings back.
+// Returns, for that instant: sweep (oar yaw, starboard sign), dip (0 blade out .. 1 buried),
+// lean (her body, + reaching toward the stern) and weight (rowing fades out as they arrive).
+export const ROW = { t0: 12.3, period: 2.6, catchAt: 0.55, until: 27.4 };
+const DRIVE = 0.39; // fraction of the cycle the blades spend in the water
+export function rowStroke(t) {
+  const w = ((((t - ROW.t0 - ROW.catchAt) / ROW.period) % 1) + 1) % 1; // 0 at the catch
+  const drive = w < DRIVE;
+  const k = drive ? smooth(w / DRIVE) : smooth((w - DRIVE) / (1 - DRIVE));
+  const sweep = drive ? lerp(0.5, -0.45, k) : lerp(-0.45, 0.5, k);
+  const dip = w < 0.5 ? 1 - smooth((w - 0.34) / 0.08) : smooth((w - 0.92) / 0.08);
+  const lean = drive ? lerp(0.28, -0.22, k) : lerp(-0.22, 0.28, k);
+  const weight = 1 - smooth((t - (ROW.until - 0.8)) / 1.2);
+  return { sweep: sweep * weight + 0.25 * (1 - weight), dip: dip * weight, lean: lean * weight + 0.05 * (1 - weight), weight, w };
+}
+
 export function boatState(t) {
   const x = 0.6 * Math.sin(t * 0.07);
   const z = 6 - 0.5 * t;
@@ -80,7 +99,8 @@ export function baseState() {
     lantern: 1.0, beamAim: null, beamPower: 1.0,
     creature: { visible: false, pos: V(0, 0, 0), yaw: 0, lean: 0.2, headPitch: 0.5, eyes: 0, follow: null },
     glitch: 0,
-    gateOpen: 0.55, ghosts: false, man: false, smile: 0, keyLight: 0, manTilt: 0,
+    // manTilt tilts his head; mouthOpen (jaw, 0..1) is for speech, and no shot has any yet
+    gateOpen: 0.55, ghosts: false, man: false, smile: 0, keyLight: 0, manTilt: 0, mouthOpen: 0,
     black: 0, bars: 1,
   };
 }

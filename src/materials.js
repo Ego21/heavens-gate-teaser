@@ -4,8 +4,8 @@ import * as THREE from 'three/webgpu';
 import {
   Fn, uniform, float, vec2, vec3, vec4, color, uv,
   positionLocal, positionWorld, positionView, normalView, normalLocal,
-  cameraPosition, transformNormalToView, varying,
-  sin, cos, mix, smoothstep, pow, exp, abs, fract, max, min, dot, normalize, length, clamp, saturate,
+  cameraPosition, transformNormalToView, varying, attribute,
+  sin, cos, mix, smoothstep, step, pow, exp, abs, fract, max, min, dot, normalize, length, clamp, saturate, fwidth,
   mx_fractal_noise_float, mx_worley_noise_float, mx_worley_noise_vec2, mx_noise_float, mx_noise_vec3, fog,
 } from 'three/tsl';
 
@@ -278,6 +278,16 @@ export function groundMaterial() {
   return m;
 }
 
+// Dead, salt-burnt grass: dry straw at the tips, dark and damp at the root.
+export function grassMaterial() {
+  const m = new THREE.MeshStandardNodeMaterial();
+  const tip = smoothstep(0.0, 0.45, positionLocal.y);
+  const n = fbm(positionWorld.mul(0.7), 3);
+  m.colorNode = mix(vec3(0.025, 0.024, 0.016), mix(vec3(0.11, 0.095, 0.06), vec3(0.16, 0.14, 0.09), n), tip);
+  m.roughnessNode = float(0.85);
+  return m;
+}
+
 // ---------------------------------------------------------------- iron
 
 export function ironMaterial() {
@@ -349,53 +359,177 @@ export function hornMaterial() {
   return m;
 }
 
-// ---------------------------------------------------------------- the white shroud
+// ---------------------------------------------------------------- the guardian (see guardian.js)
 
-// Heavy, crumpled linen. `face` describes the hood opening in the parametric uv
-// space of the shroud so its edge can be torn away with noise.
-export function shroudMaterial({ height, faceY, faceH, faceW }) {
+// White woven linen with a white-on-white pattern, worn but kept white: faint water marks, a
+// little dust where the hem meets the ground, softly frayed edges. The cloth meshes move every
+// frame, so nothing here reads the vertex position: uv is in metres across (x) and along (y)
+// the cloth, and the `edgeInfo` attribute holds (metres to the nearest free edge, metres along
+// that edge), so marks and border bands stay printed on the cloth and follow hems and edges.
+// mud: 0..1 how far dust and damp climb from the hem. fray: 0..1 how ragged the edges are.
+export function linenMaterial({ motif = 1, border = 1, tone = 1, mud = 0, fray = 0.4 } = {}) {
   const m = new THREE.MeshPhysicalNodeMaterial({ side: THREE.DoubleSide });
-  const p = positionLocal;
   const q = uv();
-  const creases = fbm(vec3(p.x.mul(7), p.y.mul(1.3), p.z.mul(7)), 5);
-  // fine crinkles: ridged noise stretched along the hang of the cloth
-  const rn = mx_noise_float(p.mul(vec3(26, 9, 26)));
-  const crinkle = float(1).sub(abs(rn)).pow(3);
-  const weave = sin(q.x.mul(2600)).mul(sin(q.y.mul(1500))).mul(0.5).add(0.5);
-  const grime = smoothstep(0.35, 0.0, p.y).mul(fbm(p.mul(3.0), 3).mul(0.6).add(0.4));
-  const yq = q.y.mul(height);
-  const dTheta = q.x.sub(0.25).mul(Math.PI * 2);
-  const ellipse = dTheta.div(faceW).pow(2).add(yq.sub(faceY).div(faceH).pow(2));
-  let col = mix(vec3(0.42, 0.41, 0.385), vec3(0.7, 0.69, 0.655), creases);
-  // cloth falls into shadow as it turns into the hood
-  col = col.mul(mix(0.12, 1.0, smoothstep(1.0, 2.6, ellipse)));
-  col = col.mul(crinkle.mul(0.1).add(0.92)).mul(weave.mul(0.06).add(0.97));
-  col = mix(col, vec3(0.16, 0.14, 0.12), grime.mul(0.7));
+  const e = attribute('edgeInfo', 'vec2');
+  // plain weave, faded out before it can shimmer
+  const wq = q.mul(1100);
+  const weave = sin(wq.x).mul(sin(wq.y)).mul(0.5).add(0.5).mul(smoothstep(1.2, 0.4, fwidth(wq.x)));
+  // allover diamond lattice, woven in a slightly greyer thread
+  const g = q.div(0.034);
+  const f = fract(g).sub(0.5);
+  const dia = abs(f.x).add(abs(f.y));
+  const latticeVis = smoothstep(0.45, 0.12, fwidth(g.x).add(fwidth(g.y)));
+  const lattice = smoothstep(0.07, 0.0, abs(dia.sub(0.34))).add(smoothstep(0.1, 0.03, dia).mul(0.7)).mul(latticeVis).mul(motif);
+  // border: two rails with a running double chevron between them
+  const d = e.x;
+  const b = d.sub(0.014).div(0.04);
+  const zig = abs(fract(e.y.div(0.03)).sub(0.5)).mul(2);
+  const inBand = step(0.0, b).mul(step(b, 1.0));
+  const chevron = max(
+    smoothstep(0.13, 0.03, abs(b.sub(zig.mul(0.8).add(0.1)))),
+    smoothstep(0.13, 0.03, abs(b.sub(float(0.9).sub(zig.mul(0.8))))),
+  );
+  const rails = smoothstep(0.0028, 0.0008, abs(d.sub(0.009))).add(smoothstep(0.0028, 0.0008, abs(d.sub(0.06))));
+  const borderVis = smoothstep(0.03, 0.008, fwidth(d));
+  // the woven pattern has worn away unevenly
+  const worn = smoothstep(0.3, 0.7, fbm(vec3(q.x.mul(9), q.y.mul(6), 4.0), 3)).mul(0.6).add(0.25);
+  const thread = lattice.mul(0.6).add(chevron.mul(inBand).add(rails).mul(borderVis).mul(border)).mul(worn);
+  // hand-woven unevenness: white, but never one flat white
+  const slub = fbm(vec3(q.x.mul(5), q.y.mul(1.6), 2.0), 3);
+  const age = fbm(vec3(q.x.mul(1.8), q.y.mul(1.2), 5.0), 4);
+  let col = mix(vec3(0.76, 0.755, 0.735), vec3(0.7, 0.69, 0.66), smoothstep(0.35, 0.75, age)).mul(tone);
+  col = col.mul(slub.mul(0.08).add(0.95));
+  col = col.mul(float(1).sub(thread.mul(0.13))).mul(weave.mul(0.05).add(0.975));
+  // faint water marks with soft tide lines
+  const tide = fbm(vec3(q.x.mul(3.4), q.y.mul(3.0), 11.0), 4);
+  col = mix(col, col.mul(vec3(0.95, 0.94, 0.9)), smoothstep(0.6, 0.68, tide).mul(0.6));
+  col = col.mul(float(1).sub(smoothstep(0.02, 0.0, abs(tide.sub(0.6))).mul(0.07)));
+  // dust and damp climbing a little from the hem, ragged rather than a straight line
+  const ragged = fbm(vec3(e.y.mul(7), d.mul(3), 21.0), 3).sub(0.5);
+  const dusty = smoothstep(0.3, 0.02, d.add(ragged.mul(0.12))).mul(mud);
+  const damp = smoothstep(0.4, 0.04, d.add(ragged.mul(0.15))).mul(mud);
+  col = col.mul(float(1).sub(damp.mul(0.12)));
+  col = mix(col, vec3(0.5, 0.49, 0.46).mul(fbm(vec3(q.x.mul(30), q.y.mul(30), 3.0), 3).mul(0.4).add(0.8)), dusty.mul(0.45));
   m.colorNode = col;
-  m.roughnessNode = float(0.93);
-  m.sheenNode = float(0.6);
+  m.roughnessNode = mix(float(0.9), float(0.7), damp);
+  m.sheenNode = float(0.55);
   m.sheenRoughnessNode = float(0.5);
-  m.sheenColorNode = vec3(0.8, 0.82, 0.85);
-  m.normalNode = bump(creases.mul(0.8).add(crinkle.mul(0.12)).add(weave.mul(0.03)), float(2.2), normalView);
-
-  // ragged hole for the face + frayed hem
-  const y = yq;
-  const tear = fbm(vec3(dTheta.mul(4), y.mul(18), 3.0), 3).sub(0.5).mul(0.55);
-  const keepFace = smoothstep(0.98, 1.0, ellipse.add(tear));
-  const hemNoise = fbm(vec3(q.x.mul(90), y.mul(25), 7.0), 3);
-  const keepHem = smoothstep(0.0, 0.02, hemNoise.add(y.div(0.07)).sub(0.85));
-  m.opacityNode = keepFace.mul(keepHem);
-  m.alphaTest = 0.5;
+  m.sheenColorNode = vec3(0.86, 0.87, 0.88);
+  m.normalNode = bump(thread.mul(0.25).add(weave.mul(0.04)).add(slub.mul(0.2)), float(0.6), normalView);
+  // frayed edges: the last centimetre or two comes apart into loose threads
+  if (fray > 0) {
+    const strands = fbm(vec3(e.y.mul(280), d.mul(40), 3.0), 2);
+    const gaps = fbm(vec3(e.y.mul(18), 7.0, 1.0), 2);
+    m.opacityNode = smoothstep(0.0, 0.02, d.div(0.018 * fray).add(strands.mul(0.9)).add(gaps.mul(0.5)).sub(0.95));
+    m.alphaTest = 0.5;
+  }
   return m;
 }
 
-export function toothMaterial(uGlow) {
+// Snow-white skin, a breath of cool grey in the creases, with a little light of its own so the
+// hands stay pale in the dark.
+export function skinMaterial({ tone = 1 } = {}) {
+  const m = new THREE.MeshPhysicalNodeMaterial();
+  const n = fbm(positionLocal.mul(60), 2);
+  const blotch = fbm(positionLocal.mul(14).add(3.0), 3);
+  const col = mix(vec3(0.87, 0.865, 0.85), vec3(0.8, 0.8, 0.8), blotch).mul(tone).mul(n.mul(0.04).add(0.98));
+  m.colorNode = col;
+  m.emissiveNode = col.mul(0.035);
+  m.roughnessNode = float(0.55).add(n.mul(0.15));
+  m.sheenNode = float(0.3);
+  m.sheenColorNode = vec3(0.8, 0.8, 0.82);
+  m.normalNode = bump(n.mul(0.3).add(blotch.mul(0.2)), float(0.4), normalView);
+  return m;
+}
+
+// The face: pale and softly blurred, with only a small gentle mouth. The head has a real face's
+// soft masses (brow, cheeks, chin, lips), but it is lit with a heavily smoothed normal (the
+// `softNormal` attribute) and a little inner light, so the features melt into an indistinct
+// pale oval; a faint veil shell (faceVeilMaterial) softens it further. The mouth is drawn in
+// the head's own space (the mesh is centred on the skull), so it moves, turns and scales with
+// the head and never with the scarf, and it is kept crisp: the blur is local to the face.
+// uSmile 0..1: resting -> gentle smile (the corners rise and draw back, the cheeks lift).
+// uOpen 0..1: the jaw opens, for speech. The two are separate: a smile never opens the mouth.
+const mouthShape = ({ p, mouthY, uSmile, uOpen }) => {
+  const sq = (x) => x.mul(x); // pow() is undefined for negative bases in WGSL
+  const halfW = float(0.0175).add(uSmile.mul(0.003));
+  const k = p.x.div(halfW); // -1..1 corner to corner
+  const k2 = sq(k);
+  const y = p.y.sub(mouthY);
+  const lift = uSmile.mul(0.0042).add(0.0011); // the corners turn up
+  const lipLine = k2.mul(lift);
+  const gap = uOpen.mul(0.011).add(uSmile.mul(0.0012)).mul(float(1).sub(k2).max(0));
+  const upper = lipLine.add(gap.mul(0.35));
+  const lower = lipLine.sub(gap.mul(0.65));
+  const thick = float(0.0007).mul(float(1).sub(k2.mul(0.6)));
+  const dist = max(lower.sub(thick).sub(y), y.sub(upper).sub(thick)); // < 0 inside the mouth
+  const across = smoothstep(1.06, 0.88, abs(k));
+  return { k, y, gap, upper, dist, across, lift, sq };
+};
+
+export function faceMaterial({ mouthY, uSmile, uOpen }) {
+  const m = new THREE.MeshPhysicalNodeMaterial();
+  const rest = attribute('position', 'vec3'); // head-centred metres, before the face moves
+  // jaw: everything below the mouth drops and tucks back a little; a smile lifts the cheeks
+  // beside the mouth and draws the corners back
+  const sqn = (x) => x.mul(x);
+  const jaw = smoothstep(mouthY + 0.004, mouthY - 0.02, rest.y).mul(smoothstep(-0.02, 0.05, rest.z));
+  const drop = uOpen.mul(0.009).mul(jaw);
+  const cheek = exp(sqn(abs(rest.x).sub(0.024).div(0.012)).add(sqn(rest.y.sub(mouthY + 0.012).div(0.012))).negate()).mul(uSmile);
+  m.positionNode = positionLocal.add(vec3(0, drop.negate().add(cheek.mul(0.0015)), drop.mul(-0.35).add(cheek.mul(0.0012))));
+
+  const front = smoothstep(0.035, 0.06, rest.z);
+  const { y, gap, upper, dist, across, lift, k, sq } = mouthShape({ p: rest, mouthY, uSmile, uOpen });
+  const aa = fwidth(y).add(0.00025);
+  const slit = smoothstep(aa, aa.negate(), dist).mul(across).mul(front);
+  // a sliver of teeth under the upper lip only once the jaw opens
+  const teeth = smoothstep(0.0018, 0.003, gap).mul(smoothstep(upper.sub(gap.mul(0.55)), upper.sub(gap.mul(0.3)), y)).mul(slit);
+  const lips = exp(sq(dist.div(0.0035)).negate()).mul(across).mul(front);
+  const dimple = exp(sq(abs(k).sub(1.12).div(0.12)).add(sq(y.sub(lift).div(0.003))).negate()).mul(uSmile).mul(front);
+
+  // indistinct: soft, low-contrast pale shading, a gentle fall-off toward the edges of the face
+  const soft = transformNormalToView(attribute('softNormal', 'vec3'));
+  m.normalNode = normalize(mix(normalView, soft, 0.65));
+  const facing = smoothstep(-0.3, 0.95, normalLocal.z).mul(0.16).add(0.84);
+  let col = vec3(0.88, 0.875, 0.86).mul(facing);
+  col = col.mul(float(1).sub(lips.mul(0.1)).sub(dimple.mul(0.1))).add(vec3(0.02, 0.004, 0.004).mul(lips));
+  col = mix(col, vec3(0.13, 0.08, 0.08), slit);
+  col = mix(col, vec3(0.7, 0.68, 0.65), teeth);
+  m.colorNode = col;
+  m.emissiveNode = col.mul(0.09).mul(float(1).sub(slit));
+  m.roughnessNode = float(0.75);
+  m.sheenNode = float(0.6);
+  m.sheenRoughnessNode = float(0.6);
+  m.sheenColorNode = vec3(0.92, 0.92, 0.94);
+  return m;
+}
+
+// A pale veil a few millimetres off the face that softens its forms like a long exposure, thin
+// over the mouth so the smile stays readable. Drawn only over the face, never the scarf.
+export function faceVeilMaterial({ mouthY }) {
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+  const p = positionLocal;
+  const sq = (x) => x.mul(x);
+  const front = smoothstep(0.02, 0.07, p.z);
+  const mouth = exp(sq(p.x.div(0.03)).add(sq(p.y.sub(mouthY).div(0.012))).negate());
+  const edge = pow(saturate(dot(normalView, normalize(positionView).negate())), 0.8);
+  m.colorNode = vec3(0.86, 0.87, 0.89);
+  m.opacityNode = front.mul(edge).mul(float(1).sub(mouth.mul(0.9))).mul(0.38);
+  return m;
+}
+
+// Soft, dark, matte leather for the flat shoes; `sole` is the thin worn sole.
+export function leatherMaterial({ sole = false } = {}) {
   const m = new THREE.MeshStandardNodeMaterial();
-  const n = fbm(positionLocal.mul(400), 2);
-  const tip = smoothstep(-0.004, 0.012, positionLocal.y); // tips paler, roots stained
-  m.colorNode = mix(mix(vec3(0.3, 0.22, 0.13), vec3(0.62, 0.57, 0.44), tip), vec3(0.45, 0.38, 0.26), n.mul(0.4));
-  m.emissiveNode = mix(vec3(0.25, 0.18, 0.1), vec3(0.7, 0.66, 0.55), tip).mul(uGlow);
-  m.roughnessNode = float(0.35);
+  const p = positionLocal;
+  const creases = fbm(p.mul(vec3(90, 160, 60)), 3);
+  const grain = fbm(p.mul(420), 2);
+  const base = sole ? vec3(0.11, 0.09, 0.07) : vec3(0.075, 0.062, 0.05);
+  // the hand-stitched seam where the upper meets the sole
+  const seam = sole ? float(0) : smoothstep(0.0018, 0.0006, abs(p.y.sub(0.012)));
+  m.colorNode = base.mul(creases.mul(0.4).add(0.75)).mul(grain.mul(0.2).add(0.9)).mul(float(1).sub(seam.mul(0.4)));
+  m.roughnessNode = float(sole ? 0.9 : 0.72).add(grain.mul(0.1));
+  m.normalNode = bump(creases.mul(0.5).add(grain.mul(0.2)).add(seam.mul(0.3)), float(0.5), normalView);
   return m;
 }
 
@@ -414,6 +548,32 @@ export function beamMaterial(uIntensity) {
   const fall = pow(v, 1.8);
   m.colorNode = vec3(0.75, 0.82, 0.9).mul(edge).mul(fall).mul(wisps.mul(1.3).add(0.15)).mul(uIntensity).mul(0.32);
   void viewDir;
+  return m;
+}
+
+// A ring of disturbed water spreading from where an oar went in: a bright crest, a broken
+// inner ring and a little foam at the centre, all fading with uAlpha.
+export function rippleMaterial(uAlpha, seed = 0) {
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const q = uv().sub(0.5).mul(2);
+  const r = length(q);
+  const broken = fbm(vec3(q.mul(6), seed * 3.1), 3);
+  const crest = smoothstep(0.78, 0.9, r).mul(smoothstep(1.0, 0.9, r));
+  const inner = smoothstep(0.5, 0.58, r).mul(smoothstep(0.66, 0.58, r)).mul(0.45);
+  const foam = smoothstep(0.3, 0.0, r).mul(broken).mul(0.6);
+  m.colorNode = vec3(0.55, 0.62, 0.7).mul(crest.add(inner).add(foam).mul(broken.mul(0.8).add(0.4))).mul(uAlpha).mul(0.35);
+  return m;
+}
+
+// Lantern glass: thin, sooty toward the top, glowing amber from the flame behind it rather than
+// being a solid light itself.
+export function lanternGlassMaterial(uIntensity) {
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const p = positionLocal;
+  const soot = smoothstep(0.02, 0.1, p.y).mul(0.7).add(fbm(p.mul(60), 3).mul(0.25));
+  const edge = pow(float(1).sub(abs(dot(normalView, normalize(positionView).negate()))), 2.0);
+  m.colorNode = vec3(1.0, 0.58, 0.24).mul(float(1).sub(soot.mul(0.75))).mul(uIntensity).mul(0.55);
+  m.opacityNode = saturate(edge.mul(0.5).add(0.22).add(soot.mul(0.3)));
   return m;
 }
 

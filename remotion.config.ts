@@ -17,4 +17,7 @@ if (chrome) {
 Config.setChromiumOpenGlRenderer('angle');
 Config.setVideoImageFormat('png');
 Config.setConcurrency(1); // one GPU context; frames are heavy
+// the first frame builds the whole world and compiles every shader, which takes longer than
+// Remotion's default 30 s wait on some machines
+Config.setDelayRenderTimeoutInMilliseconds(180000);
 Config.setCodec('h264');
